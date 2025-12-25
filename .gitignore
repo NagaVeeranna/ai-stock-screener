@@ -1,14 +1,9 @@
-# Node
 node_modules/
-
-# React build
 dist/
 build/
-
-# Python
+.env
 __pycache__/
 *.pyc
-.env
-
-# OS
-.DS_Store
+git add .
+git commit -m "Cleanup: remove node_modules and ignore dependencies"
+git push
