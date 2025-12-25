@@ -1,9 +1,15 @@
+# Node
 node_modules/
+
+# Vite
+.vite/
+vite-temp/
+
+# Build
 dist/
 build/
-.env
+
+# Python
 __pycache__/
 *.pyc
-git add .
-git commit -m "Cleanup: remove node_modules and ignore dependencies"
-git push
+.env
