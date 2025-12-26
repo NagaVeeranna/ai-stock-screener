@@ -1,43 +1,97 @@
 import os
 import json
-import google.generativeai as genai
+import re
+from google import genai
+from google.genai import types
 from app.llm.prompt import PROMPT_TEMPLATE
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
-if not GOOGLE_API_KEY:
-    raise RuntimeError("GOOGLE_API_KEY is not set")
+INTENT_SYNONYMS = {
+    "high_price": ["high", "highest", "top", "expensive", "costliest"],
+    "low_price": ["low", "lowest", "cheap", "cheapest", "lowet"],
+    "high_volume": ["most traded", "high volume", "top volume"],
+    "low_volume": ["low volume", "least traded"],
+}
 
-genai.configure(api_key=GOOGLE_API_KEY)
+GENERIC_WORDS = {
+    "stock", "stocks", "market", "nse", "shares",
+    "show", "me", "get", "find", "give", "list"
+}
 
+SMALL_TALK = {
+    "hi", "hello", "hey", "hii", "hlo",
+    "good morning", "good evening", "good afternoon"
+}
+
+# ---------------- HELPERS ----------------
+
+def extract_limit(text: str):
+    match = re.search(r'(top|first)\s*(\d+)', text)
+    return int(match.group(2)) if match else None
+
+
+def detect_intent(text: str):
+    for intent, words in INTENT_SYNONYMS.items():
+        if any(w in text for w in words):
+            return intent
+    return None
+
+
+def extract_keywords(text: str):
+    words = re.findall(r"[a-zA-Z]+", text.lower())
+    return [
+        w for w in words
+        if w not in GENERIC_WORDS
+        and w not in sum(INTENT_SYNONYMS.values(), [])
+    ]
+
+# ---------------- MAIN ----------------
 
 def parse_query(query: str) -> dict:
-    """
-    Convert natural language query into DSL JSON.
-    Never crashes.
-    """
+    q = query.strip().lower()
 
-    # ✅ SAFE placeholder replacement
+    # 1️⃣ Small talk
+    if q in SMALL_TALK:
+        return {"ignore": True}
+
+    # 2️⃣ ALWAYS extract limit first
+    limit = extract_limit(q)
+
+    # 3️⃣ Detect intent & keywords
+    intent = detect_intent(q)
+    keywords = extract_keywords(q)
+
+    # 4️⃣ Rule-based response (no LLM)
+    if intent or keywords:
+        return {
+            "intent": intent,
+            "keywords": keywords,
+            "filters": [],
+            "limit": limit
+        }
+
+    # 5️⃣ LLM fallback
     prompt = PROMPT_TEMPLATE.replace("{query}", query)
 
-    # ✅ UPDATED MODEL NAME
-    model = genai.GenerativeModel("models/gemini-1.5-flash")
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model="gemini-2.5-flash-lite",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.2,
+            max_output_tokens=512
+        )
+    )
 
     raw = response.text.strip()
-    print("\n🔍 RAW LLM OUTPUT:\n", raw)
 
-    # Remove markdown fences
     if raw.startswith("```"):
         raw = raw.replace("```json", "").replace("```", "").strip()
 
-    try:
-        parsed = json.loads(raw)
-        parsed.setdefault("filters", [])
-        return parsed
-    except Exception:
-        print("⚠️ JSON parse failed — fallback used")
-        return {
-            "filters": [],
-            "raw_text": raw
-        }
+    parsed = json.loads(raw)
+
+    parsed.setdefault("filters", [])
+    parsed.setdefault("keywords", [])
+    parsed.setdefault("limit", limit)
+
+    return parsed

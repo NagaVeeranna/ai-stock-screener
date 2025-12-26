@@ -13,3 +13,6 @@ build/
 __pycache__/
 *.pyc
 .env
+
+#uploaded files
+uploads/

@@ -1,146 +1,209 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Box,
   TextField,
   Button,
-  List,
-  ListItem,
   Paper,
   Typography,
   Stack,
-  Divider
+  Chip,
+  CircularProgress,
+  Divider,
 } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import { useToast } from "../components/ToastProvider";
 
 export default function Chat() {
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
   const toast = useToast();
+  const bottomRef = useRef(null);
 
-  const ask = async () => {
-    if (!query.trim()) return;
+  const suggestedQueries = [
+    "high stocks",
+    "low stocks",
+    "top 5 stocks",
+    "bajaj stocks",
+    "stocks with volume > 1000000",
+  ];
 
-    // User message
-    setMessages(prev => [...prev, { role: "user", text: query }]);
-    const q = query;
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  const ask = async (customQuery) => {
+    const q = customQuery || query;
+    if (!q.trim()) return;
+
+    setMessages((prev) => [...prev, { role: "user", text: q }]);
     setQuery("");
+    setLoading(true);
 
     try {
       const response = await fetch("http://127.0.0.1:5000/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q })
+        body: JSON.stringify({ query: q }),
       });
 
       const data = await response.json();
 
-      setMessages(prev => [
+      setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          payload: data
-        }
+        { role: "assistant", payload: data },
       ]);
-
-      toast?.showToast("Response received", "success");
-
     } catch (err) {
-      console.error(err);
-      setMessages(prev => [
+      toast?.showToast("Server not responding", "error");
+      setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: "⚠️ Unable to fetch server response" }
+        { role: "assistant", text: "⚠️ Unable to reach server" },
       ]);
-      toast?.showToast("Server issue", "warning");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <Box p={4}>
-      <Typography variant="h5" gutterBottom>Chat</Typography>
+      <Typography variant="h5" fontWeight={700} gutterBottom>
+        AI Stock Assistant
+      </Typography>
 
-      <Paper sx={{ maxHeight: 420, overflow: "auto", mb: 2, p: 2 }}>
-        <List>
-          {messages.map((m, i) => (
-            <ListItem key={i} alignItems="flex-start">
-              {m.role === "user" ? (
-                <Typography
-                  sx={{
-                    ml: "auto",
-                    bgcolor: "#e3f2fd",
-                    p: 1.2,
-                    borderRadius: 2,
-                    maxWidth: "75%"
-                  }}
-                >
-                  {m.text}
-                </Typography>
-              ) : (
-                <Box
-                  sx={{
-                    bgcolor: "#f1f8e9",
-                    p: 2,
-                    borderRadius: 2,
-                    width: "100%"
-                  }}
-                >
-                  {/* Greeting / Info message */}
+      {/* CHAT WINDOW */}
+      <Paper sx={{ height: 480, overflowY: "auto", p: 2, mb: 2, borderRadius: 3 }}>
+        <Stack spacing={2}>
+          {/* Empty State */}
+          {messages.length === 0 && (
+            <Box>
+              <Typography color="text.secondary" fontSize={14}>
+                Try asking:
+              </Typography>
+              <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
+                {suggestedQueries.map((q) => (
+                  <Chip
+                    key={q}
+                    label={q}
+                    onClick={() => ask(q)}
+                    clickable
+                    variant="outlined"
+                    sx={{ mb: 1 }}
+                  />
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          {/* Messages */}
+          {messages.map((m, i) =>
+            m.role === "user" ? (
+              <Box key={i} alignSelf="flex-end" maxWidth="75%">
+                <Paper sx={{ bgcolor: "#e3f2fd", p: 1.5, borderRadius: 2 }}>
+                  <Typography>{m.text}</Typography>
+                </Paper>
+              </Box>
+            ) : (
+              <Box key={i}>
+                <Paper sx={{ bgcolor: "#f8fafc", p: 2, borderRadius: 2 }}>
+                  {/* Assistant message */}
                   {m.payload?.message && (
-                    <Typography sx={{ whiteSpace: "pre-line" }}>
+                    <Typography sx={{ whiteSpace: "pre-line", mb: 1 }}>
                       {m.payload.message}
                     </Typography>
                   )}
 
-                  {/* Error */}
-                  {m.payload?.type === "error" && (
-                    <Typography color="error">
-                      ❌ {m.payload.message}
+                  {/* ✅ INTENT HINT (FIXED) */}
+                  {m.payload?.intent && (
+                    <Typography fontSize={12} color="text.secondary" mb={1}>
+                      Showing results sorted by{" "}
+                      <b>{m.payload.intent.replace("_", " ")}</b>
                     </Typography>
                   )}
 
-                  {/* Results */}
-                  {Array.isArray(m.payload?.data) && (
-                    <>
-                      <Typography variant="subtitle2">
-                        Results Found: {m.payload.data.length}
-                      </Typography>
-                      <Divider sx={{ my: 1 }} />
+                  {/* ✅ STOCK RESULTS (RENDER ONLY BY DATA) */}
+                  {Array.isArray(m.payload?.data) &&
+                    m.payload.data.length > 0 && (
+                      <>
+                        <Divider sx={{ my: 1 }} />
+                        <Stack spacing={1}>
+                          {m.payload.data.map((row, idx) => {
+                            const symbol =
+                              row.symbol || row.Symbol || "N/A";
+                            const close =
+                              row.close ?? row.Close ?? "—";
+                            const volume =
+                              row.volume ?? row.Volume ?? "—";
 
-                      {m.payload.data.slice(0, 15).map((row, idx) => {
-                        // 🔥 SAFE FIELD ACCESS (VERY IMPORTANT)
-                        const symbol =
-                          row.symbol || row.Symbol || row.stock || "N/A";
+                            return (
+                              <Paper
+                                key={idx}
+                                variant="outlined"
+                                sx={{
+                                  p: 1.5,
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  borderRadius: 2,
+                                }}
+                              >
+                                <Box>
+                                  <Typography fontWeight={600}>
+                                    {symbol}
+                                  </Typography>
+                                  <Typography
+                                    fontSize={13}
+                                    color="text.secondary"
+                                  >
+                                    Volume: {volume}
+                                  </Typography>
+                                </Box>
+                                <Chip
+                                  icon={<TrendingUpIcon />}
+                                  label={`₹ ${close}`}
+                                  color="primary"
+                                  variant="outlined"
+                                />
+                              </Paper>
+                            );
+                          })}
+                        </Stack>
+                      </>
+                    )}
+                </Paper>
+              </Box>
+            )
+          )}
 
-                        const close =
-                          row.close ?? row.Close ?? row.last ?? "—";
+          {/* Loading */}
+          {loading && (
+            <Stack direction="row" spacing={1} alignItems="center">
+              <CircularProgress size={16} />
+              <Typography fontSize={13} color="text.secondary">
+                Analyzing market data…
+              </Typography>
+            </Stack>
+          )}
 
-                        const volume =
-                          row.volume ?? row.Volume ?? row.vol ?? "—";
-
-                        return (
-                          <Typography key={idx} sx={{ fontSize: 13 }}>
-                            📈 <b>{symbol}</b> | Close: {close} | Vol: {volume}
-                          </Typography>
-                        );
-                      })}
-                    </>
-                  )}
-                </Box>
-              )}
-            </ListItem>
-          ))}
-        </List>
+          <div ref={bottomRef} />
+        </Stack>
       </Paper>
 
+      {/* INPUT */}
       <Stack direction="row" spacing={2}>
         <TextField
           fullWidth
-          placeholder="Ask stock query (e.g. Close > 100)"
+          placeholder="Ask about stocks…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && ask()}
         />
-        <Button variant="contained" endIcon={<SendIcon />} onClick={ask}>
+        <Button
+          variant="contained"
+          endIcon={<SendIcon />}
+          onClick={() => ask()}
+          disabled={loading}
+        >
           Ask
         </Button>
       </Stack>

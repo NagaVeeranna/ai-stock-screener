@@ -1,31 +1,93 @@
 import pandas as pd
 import os
 
-DATA_PATH = "app/data/uploads/stocks.csv"
+UPLOAD_DIR = "app/data/uploads"
 
-def run_screener(filters):
-    if not os.path.exists(DATA_PATH):
-        return []
+NUMERIC_COLS = ["open", "high", "low", "close", "volume"]
 
-    df = pd.read_csv(DATA_PATH)
+# ❌ Never treat these as real stocks
+INVALID_SYMBOLS = {"STOCKS", "ALL", "MARKET", "SHARES"}
 
-    for f in filters:
-        field = f["field"]
-        op = f["operator"]
-        val = f["value"]
+def run_screener(filters, symbols=None):
+    results = []
 
-        if field not in df.columns:
+    if not os.path.exists(UPLOAD_DIR):
+        return results
+
+    # Normalize symbols list once (case-safe)
+    if symbols:
+        symbols = [s.upper() for s in symbols]
+
+    for file in os.listdir(UPLOAD_DIR):
+        if not file.endswith(".csv"):
             continue
 
-        if op == "<":
-            df = df[df[field] < val]
-        elif op == ">":
-            df = df[df[field] > val]
-        elif op == "==":
-            df = df[df[field] == val]
-        elif op == "<=":
-            df = df[df[field] <= val]
-        elif op == ">=":
-            df = df[df[field] >= val]
+        # ✅ ALWAYS keep symbols in UPPERCASE
+        symbol = file.replace("cleaned_", "").replace(".csv", "").upper()
 
-    return df.head(20).to_dict(orient="records")
+        # 🚫 Skip fake / generic CSVs
+        if not symbol or symbol in INVALID_SYMBOLS:
+            continue
+
+        # ✅ Company filter (case-safe)
+        if symbols and symbol not in symbols:
+            continue
+
+        df = pd.read_csv(os.path.join(UPLOAD_DIR, file))
+
+        if df.empty:
+            continue
+
+        # 🔒 Force numeric conversion
+        for col in NUMERIC_COLS:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        # Apply numeric filters
+        for f in filters:
+            field = f["field"]
+            op = f["operator"]
+            val = f["value"]
+
+            if field not in df.columns:
+                continue
+
+            if op == "<":
+                df = df[df[field] < val]
+            elif op == ">":
+                df = df[df[field] > val]
+            elif op == "==":
+                df = df[df[field] == val]
+            elif op == "<=":
+                df = df[df[field] <= val]
+            elif op == ">=":
+                df = df[df[field] >= val]
+
+        if df.empty:
+            continue
+
+        # ✅ Handle date column safely
+        date_col = next((c for c in df.columns if c.lower() == "date"), None)
+        if date_col:
+            df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+            df = df.sort_values(date_col)
+
+        latest = df.iloc[-1]
+
+        row = latest.to_dict()
+        row["symbol"] = symbol
+
+        # 🔒 NaN-SAFE numeric normalization (CRITICAL FIX)
+        close_val = row.get("close")
+        volume_val = row.get("volume")
+
+        row["close"] = float(close_val) if pd.notna(close_val) else 0.0
+        row["volume"] = int(volume_val) if pd.notna(volume_val) else 0
+
+        # 🚫 FINAL SAFETY: skip invalid prices
+        if row["close"] <= 0:
+            continue
+
+        results.append(row)
+
+    return results

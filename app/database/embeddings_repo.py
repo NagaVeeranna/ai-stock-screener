@@ -1,7 +1,4 @@
-import json
-from app.database.postgres import get_connection
-
-def save_embeddings_to_db(embeddings, metadata):
+def store_embeddings(embeddings, metadata):
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -11,7 +8,7 @@ def save_embeddings_to_db(embeddings, metadata):
             INSERT INTO stock_embeddings (embedding, metadata)
             VALUES (%s, %s)
             """,
-            (emb, json.dumps(meta))
+            (emb, meta)   # emb = list[float], pgvector accepts this directly
         )
 
     conn.commit()
