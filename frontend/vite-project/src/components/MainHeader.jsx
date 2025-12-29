@@ -13,12 +13,7 @@ export default function MainHeader({ title = 'AI-Powered Stock Screener' }){
         <Typography variant="h6">{title}</Typography>
 
         <Box>
-          <Tooltip title="Upload CSV">
-            <Button component={RouterLink} to="/upload" startIcon={<UploadFileIcon />} sx={{ mr: 1 }}>Upload</Button>
-          </Tooltip>
-          <Tooltip title="Chat Assistant">
-            <Button component={RouterLink} to="/chat" startIcon={<ChatBubbleIcon />} sx={{ mr: 1 }}>Chat</Button>
-          </Tooltip>
+          
           <Tooltip title="Logout">
             <Button color="error" startIcon={<LogoutIcon />} onClick={logout}>Logout</Button>
           </Tooltip>

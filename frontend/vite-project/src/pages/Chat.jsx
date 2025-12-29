@@ -9,10 +9,18 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  Avatar,
+  IconButton,
+  alpha,
+  Tooltip
 } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import SmartToyIcon from "@mui/icons-material/SmartToy";
+import PersonIcon from "@mui/icons-material/Person";
+import StarBorderIcon from "@mui/icons-material/StarBorder";
 import { useToast } from "../components/ToastProvider";
+import { useWatchlistStore } from "../store/useWatchlistStore";
 
 export default function Chat() {
   const [query, setQuery] = useState("");
@@ -20,13 +28,14 @@ export default function Chat() {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const bottomRef = useRef(null);
+  const addToWatchlist = useWatchlistStore((state) => state.addToWatchlist);
 
   const suggestedQueries = [
-    "high stocks",
-    "low stocks",
     "top 5 stocks",
-    "bajaj stocks",
-    "stocks with volume > 1000000",
+    "high volume stocks",
+    "stocks under ₹500",
+    "bajaj performance",
+    "best gainers today",
   ];
 
   useEffect(() => {
@@ -49,16 +58,12 @@ export default function Chat() {
       });
 
       const data = await response.json();
-
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", payload: data },
-      ]);
+      setMessages((prev) => [...prev, { role: "assistant", payload: data }]);
     } catch (err) {
-      toast?.showToast("Server not responding", "error");
+      toast?.showToast("AI Service unreachable", "error");
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: "⚠️ Unable to reach server" },
+        { role: "assistant", text: "⚠️ Server connection error. Please try again." },
       ]);
     } finally {
       setLoading(false);
@@ -66,145 +71,182 @@ export default function Chat() {
   };
 
   return (
-    <Box p={4}>
-      <Typography variant="h5" fontWeight={700} gutterBottom>
-        AI Stock Assistant
-      </Typography>
+    <Box sx={{ 
+      height: 'calc(100vh - 100px)', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      bgcolor: '#f8fafc',
+      p: { xs: 2, md: 4 } 
+    }}>
+      
+      {/* GLASS HEADER */}
+      <Paper sx={{ 
+        p: 2, 
+        mb: 2, 
+        borderRadius: 4, 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: 2,
+        backdropFilter: 'blur(10px)',
+        bgcolor: alpha('#fff', 0.8),
+        border: '1px solid #e2e8f0',
+        boxShadow: 'none'
+      }}>
+        <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
+          <SmartToyIcon />
+        </Avatar>
+        <Box>
+          <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1 }}>
+            AI Market Advisor
+          </Typography>
+          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+            Powered by GPT-4 • Real-time Data
+          </Typography>
+        </Box>
+      </Paper>
 
       {/* CHAT WINDOW */}
-      <Paper sx={{ height: 480, overflowY: "auto", p: 2, mb: 2, borderRadius: 3 }}>
-        <Stack spacing={2}>
-          {/* Empty State */}
+      <Paper sx={{ 
+        flexGrow: 1, 
+        overflowY: "auto", 
+        p: 3, 
+        mb: 2, 
+        borderRadius: 5, 
+        bgcolor: '#fff',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+        '&::-webkit-scrollbar': { width: '6px' },
+        '&::-webkit-scrollbar-thumb': { bgcolor: '#e2e8f0', borderRadius: '10px' }
+      }}>
+        <Stack spacing={3}>
           {messages.length === 0 && (
-            <Box>
-              <Typography color="text.secondary" fontSize={14}>
-                Try asking:
+            <Box textAlign="center" py={5}>
+              <Typography variant="h5" fontWeight={800} gutterBottom>
+                How can I help you today?
               </Typography>
-              <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
+              <Typography variant="body2" color="text.secondary" mb={3}>
+                Ask about specific tickers, price thresholds, or volume spikes.
+              </Typography>
+              <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap">
                 {suggestedQueries.map((q) => (
                   <Chip
                     key={q}
                     label={q}
                     onClick={() => ask(q)}
-                    clickable
+                    sx={{ 
+                      borderRadius: 2, 
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      '&:hover': { bgcolor: 'primary.main', color: '#fff' }
+                    }}
                     variant="outlined"
-                    sx={{ mb: 1 }}
                   />
                 ))}
               </Stack>
             </Box>
           )}
 
-          {/* Messages */}
-          {messages.map((m, i) =>
-            m.role === "user" ? (
-              <Box key={i} alignSelf="flex-end" maxWidth="75%">
-                <Paper sx={{ bgcolor: "#e3f2fd", p: 1.5, borderRadius: 2 }}>
-                  <Typography>{m.text}</Typography>
-                </Paper>
-              </Box>
-            ) : (
-              <Box key={i}>
-                <Paper sx={{ bgcolor: "#f8fafc", p: 2, borderRadius: 2 }}>
-                  {/* Assistant message */}
-                  {m.payload?.message && (
-                    <Typography sx={{ whiteSpace: "pre-line", mb: 1 }}>
-                      {m.payload.message}
-                    </Typography>
-                  )}
+          {messages.map((m, i) => (
+            <Box key={i} sx={{ 
+              display: 'flex', 
+              flexDirection: m.role === "user" ? "row-reverse" : "row", 
+              gap: 2 
+            }}>
+              <Avatar sx={{ 
+                width: 32, 
+                height: 32, 
+                bgcolor: m.role === "user" ? "secondary.main" : "primary.main",
+                fontSize: '1rem'
+              }}>
+                {m.role === "user" ? <PersonIcon /> : <SmartToyIcon fontSize="small" />}
+              </Avatar>
 
-                  {/* ✅ INTENT HINT (FIXED) */}
-                  {m.payload?.intent && (
-                    <Typography fontSize={12} color="text.secondary" mb={1}>
-                      Showing results sorted by{" "}
-                      <b>{m.payload.intent.replace("_", " ")}</b>
-                    </Typography>
-                  )}
+              <Box sx={{ maxWidth: '80%' }}>
+                <Paper sx={{ 
+                  p: 2, 
+                  borderRadius: m.role === "user" ? '20px 4px 20px 20px' : '4px 20px 20px 20px',
+                  bgcolor: m.role === "user" ? "primary.main" : "#f1f5f9",
+                  color: m.role === "user" ? "#fff" : "#1e293b",
+                  boxShadow: 'none'
+                }}>
+                  {m.text && <Typography variant="body2" sx={{ fontWeight: 500 }}>{m.text}</Typography>}
+                  
+                  {m.payload && (
+                    <Box>
+                      <Typography variant="body2" sx={{ whiteSpace: "pre-line", fontWeight: 500 }}>
+                        {m.payload.message}
+                      </Typography>
 
-                  {/* ✅ STOCK RESULTS (RENDER ONLY BY DATA) */}
-                  {Array.isArray(m.payload?.data) &&
-                    m.payload.data.length > 0 && (
-                      <>
-                        <Divider sx={{ my: 1 }} />
-                        <Stack spacing={1}>
-                          {m.payload.data.map((row, idx) => {
-                            const symbol =
-                              row.symbol || row.Symbol || "N/A";
-                            const close =
-                              row.close ?? row.Close ?? "—";
-                            const volume =
-                              row.volume ?? row.Volume ?? "—";
-
-                            return (
-                              <Paper
-                                key={idx}
-                                variant="outlined"
-                                sx={{
-                                  p: 1.5,
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  alignItems: "center",
-                                  borderRadius: 2,
-                                }}
-                              >
-                                <Box>
-                                  <Typography fontWeight={600}>
-                                    {symbol}
-                                  </Typography>
-                                  <Typography
-                                    fontSize={13}
-                                    color="text.secondary"
-                                  >
-                                    Volume: {volume}
-                                  </Typography>
-                                </Box>
-                                <Chip
-                                  icon={<TrendingUpIcon />}
-                                  label={`₹ ${close}`}
-                                  color="primary"
-                                  variant="outlined"
-                                />
-                              </Paper>
-                            );
-                          })}
+                      {Array.isArray(m.payload?.data) && m.payload.data.length > 0 && (
+                        <Stack spacing={1.5} mt={2}>
+                          {m.payload.data.slice(0, 5).map((row, idx) => (
+                            <Paper key={idx} variant="outlined" sx={{ 
+                              p: 1.5, borderRadius: 3, display: "flex", 
+                              justifyContent: "space-between", alignItems: "center",
+                              bgcolor: '#fff', '&:hover': { bgcolor: '#f8fafc' }
+                            }}>
+                              <Box>
+                                <Typography variant="subtitle2" fontWeight={800}>{row.symbol || "N/A"}</Typography>
+                                <Typography variant="caption" color="text.secondary">Vol: {row.volume?.toLocaleString()}</Typography>
+                              </Box>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Typography fontWeight={800} color="primary.main">₹{row.close}</Typography>
+                                <Tooltip title="Add to Watchlist">
+                                  <IconButton size="small" onClick={() => {
+                                    addToWatchlist(row);
+                                    toast?.showToast(`${row.symbol} added`, "success");
+                                  }}>
+                                    <StarBorderIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Stack>
+                            </Paper>
+                          ))}
                         </Stack>
-                      </>
-                    )}
+                      )}
+                    </Box>
+                  )}
                 </Paper>
               </Box>
-            )
-          )}
+            </Box>
+          ))}
 
-          {/* Loading */}
           {loading && (
-            <Stack direction="row" spacing={1} alignItems="center">
-              <CircularProgress size={16} />
-              <Typography fontSize={13} color="text.secondary">
-                Analyzing market data…
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                <CircularProgress size={18} thickness={6} sx={{ color: '#fff' }} />
+              </Avatar>
+              <Typography variant="caption" fontWeight={600} color="text.secondary">
+                Analyzing market data...
               </Typography>
             </Stack>
           )}
-
           <div ref={bottomRef} />
         </Stack>
       </Paper>
 
-      {/* INPUT */}
-      <Stack direction="row" spacing={2}>
+      {/* INPUT AREA */}
+      <Stack direction="row" spacing={2} component={Paper} sx={{ 
+        p: 1, borderRadius: 4, border: '1px solid #e2e8f0', boxShadow: 'none' 
+      }}>
         <TextField
           fullWidth
-          placeholder="Ask about stocks…"
+          placeholder="Type a command (e.g., 'What are the top gainers?')"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && ask()}
+          sx={{
+            "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+            "& .MuiInputBase-input": { fontWeight: 500 }
+          }}
         />
         <Button
           variant="contained"
-          endIcon={<SendIcon />}
           onClick={() => ask()}
           disabled={loading}
+          sx={{ borderRadius: 3, px: 4, minWidth: 100 }}
         >
-          Ask
+          {loading ? <CircularProgress size={20} /> : <SendIcon />}
         </Button>
       </Stack>
     </Box>
