@@ -100,7 +100,7 @@ export default function Chat() {
             AI Market Advisor
           </Typography>
           <Typography variant="caption" color="text.secondary" fontWeight={600}>
-            Powered by GPT-4 • Real-time Data
+            Powered by Gemini • Real-time Data
           </Typography>
         </Box>
       </Paper>
