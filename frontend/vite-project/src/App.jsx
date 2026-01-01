@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import UploadCSV from "./pages/UploadCSV";
 import Chat from "./pages/Chat";
 import WatchlistAll from './pages/WatchlistAll'; 
+import StockDetail from './pages/StockDetail'; // ✅ NEW: Import Detail Page
 
 // Component to protect routes from unauthenticated access
 const PrivateRoute = ({ children }) => {
@@ -60,12 +61,23 @@ export default function App() {
             }
           />
 
-          {/* ✅ ADDED: Protected Full Watchlist View */}
+          {/* Protected Full Watchlist View */}
           <Route
             path="/watchlist-all"
             element={
               <PrivateRoute>
                 <WatchlistAll />
+              </PrivateRoute>
+            }
+          />
+
+          {/* ✅ ADDED: Protected Stock Detail Route */}
+          {/* The ':symbol' allows the page to load data for any of your 46 stocks */}
+          <Route
+            path="/stock/:symbol"
+            element={
+              <PrivateRoute>
+                <StockDetail />
               </PrivateRoute>
             }
           />

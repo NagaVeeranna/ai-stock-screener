@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 import traceback
 
+# Core logic imports
 from app.llm.parser import parse_query
 from app.screener.runner import run_screener
 from app.services.stock_resolver import resolve_symbols
@@ -8,21 +9,42 @@ from app.services.chat_intelligence import handle_small_talk
 
 chat_bp = Blueprint("chat_bp", __name__)
 
-# ---------- SAFE CONVERTERS ----------
+# --- UTILITIES ---
 
-def safe_float(val):
+def safe_numeric(val, default=0, dtype=float):
+    """Safely converts values for robust sorting, handling NaN and empty strings."""
+    if val is None or val == "":
+        return default
     try:
-        return float(val)
-    except Exception:
-        return 0.0
+        return dtype(val)
+    except (ValueError, TypeError):
+        return default
 
-def safe_int(val):
-    try:
-        return int(val)
-    except Exception:
-        return 0
+# --- CORE LOGIC HANDLERS ---
 
-# ------------------------------------
+def apply_intent_sorting(results, intent):
+    """
+    Centralized sorting logic based on AI-detected intent. 
+    """
+    if not intent:
+        return results
+        
+    sort_config = {
+        "low_price":     {"key": lambda x: safe_numeric(x.get("close")), "reverse": False},
+        "high_price":    {"key": lambda x: safe_numeric(x.get("close")), "reverse": True},
+        "high_volume":   {"key": lambda x: safe_numeric(x.get("volume"), dtype=int), "reverse": True},
+        "low_volume":    {"key": lambda x: safe_numeric(x.get("volume"), dtype=int), "reverse": False},
+        "high_delivery": {"key": lambda x: safe_numeric(x.get("%deliverble")), "reverse": True},
+        "high_turnover": {"key": lambda x: safe_numeric(x.get("turnover")), "reverse": True},
+        "high_trades":   {"key": lambda x: safe_numeric(x.get("trades"), dtype=int), "reverse": True}
+    }
+    
+    config = sort_config.get(intent)
+    if config:
+        return sorted(results, key=config["key"], reverse=config["reverse"])
+    return results
+
+# --- MAIN ROUTE ---
 
 @chat_bp.route("/chat", methods=["POST"])
 def chat():
@@ -33,82 +55,71 @@ def chat():
         if not query:
             return jsonify({"error": "Query is required"}), 400
 
-        # 1️⃣ Small talk / greetings
+        # 1. Immediate Intercept: Greetings / Small Talk
         small_talk = handle_small_talk(query)
         if small_talk:
-            return jsonify({
-                "message": small_talk["response"],
-                "data": []
-            })
+            return jsonify({"message": small_talk["response"], "data": []})
 
-        # 2️⃣ Parse query
+        # 2. NLP Processing & Intent Extraction
         parsed = parse_query(query)
-        print("🧠 PARSED QUERY:", parsed)
-
+        intent = parsed.get("intent")
         filters = parsed.get("filters", [])
         keywords = parsed.get("keywords", [])
-        intent = parsed.get("intent")
-        limit = parsed.get("limit") or 5
-
-        # 3️⃣ Resolve symbols
+        
+        # ✅ FIX: CAPTURE FROM UI TOGGLES
+        # data.get("quarters") captures the manual button click from the UI.
+        # parsed.get("quarters") captures it if the user typed "last 4 quarters".
+        quarters = data.get("quarters") or parsed.get("quarters") 
+        
+        # 3. Symbol Resolution
         symbols = resolve_symbols(parsed)
+        
+        # 🛡️ LOGIC GUARD: Symbol Search
+        if keywords and not symbols:
+            return jsonify({
+                "message": f"I couldn't find data for '{', '.join(keywords)}'.",
+                "data": [],
+                "status": "not_found"
+            })
 
-        # 👉 IMPORTANT FIX:
-        # Intent-based queries without symbols = ALL stocks
-        if intent and not symbols:
-            symbols = None
+        # Global scan logic
+        if not keywords and not symbols and intent:
+            symbols = None 
 
-        # 4️⃣ Run screener
-        results = run_screener(filters, symbols)
+        # 4. Data Retrieval with Quarterly Support
+        results = run_screener(filters, symbols, quarters=quarters)
 
         if not results:
             return jsonify({
-                "message": "No stocks matched your criteria",
+                "message": "No stocks matched your criteria for the selected period.",
                 "data": []
             })
 
-        # 5️⃣ Intent-based sorting
-        if intent == "high_price":
-            results = sorted(
-                results,
-                key=lambda x: safe_float(x.get("close")),
-                reverse=True
-            )
+        # 5. Result Optimization
+        results = apply_intent_sorting(results, intent)
+        
+        limit_val = parsed.get("limit")
+        limit = int(limit_val) if limit_val and str(limit_val).isdigit() else None
+        
+        total_found = len(results)
+        if limit:
+            results = results[:limit]
 
-        elif intent == "low_price":
-            results = sorted(
-                results,
-                key=lambda x: safe_float(x.get("close"))
-            )
-
-        elif intent == "high_volume":
-            results = sorted(
-                results,
-                key=lambda x: safe_int(x.get("volume")),
-                reverse=True
-            )
-
-        elif intent == "low_volume":
-            results = sorted(
-                results,
-                key=lambda x: safe_int(x.get("volume"))
-            )
-
-        # 6️⃣ Apply limit (FROM PARSER)
-        results = results[:limit]
+        # 6. Dynamic Response Construction
+        period_msg = f"over the last {quarters} quarters" if quarters else "current"
+        intent_label = intent.replace("_", " ") if intent else "matching"
+        message = f"Found {len(results)} {intent_label} stocks {period_msg}."
 
         return jsonify({
-            "message": f"Found {len(results)} matching stocks",
+            "message": message,
             "query": query,
             "intent": intent,
-            "limit": limit,
-            "symbols_used": symbols,
-            "data": results
+            "quarters": quarters,
+            "data": results,
+            "count": len(results),
+            "total_universe": total_found
         })
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({
-            "error": "Failed to process query",
-            "details": str(e)
-        }), 500
+        return jsonify({"error": "An internal error occurred.", "details": str(e)}), 500

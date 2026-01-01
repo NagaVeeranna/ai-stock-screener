@@ -321,4 +321,4 @@ function InsightItem({ title, stock, icon, color }) {
 const fabStyle = {
   position: 'fixed', bottom: 40, right: 40, borderRadius: 5, px: 4, py: 2.5,
   fontWeight: 900, background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', zIndex: 1000
-};
+};  
