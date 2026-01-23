@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Box, Button, Container, Typography, Stack, Grid, 
+import {
+  Box, Button, Container, Typography, Stack, Grid,
   Card, alpha, useTheme, Fade, Zoom, useScrollTrigger, Fab
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
@@ -23,21 +23,11 @@ import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import Background from '../components/Background';
 
 export default function Landing() {
-  const theme = useTheme();
-  const [scrolled, setScrolled] = useState(false);
-  
   const trigger = useScrollTrigger({
     disableHysteresis: true,
-    threshold: 100,
+    threshold: 50,
   });
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 50);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  const scrolled = trigger;
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -59,7 +49,7 @@ export default function Landing() {
   return (
     <Box sx={{ minHeight: '100vh', pb: 10, bgcolor: '#fdfdff', overflow: 'hidden' }}>
       <Background />
-      
+
       {/* Animated gradient background elements */}
       <Box sx={{
         position: 'absolute',
@@ -71,7 +61,7 @@ export default function Landing() {
         right: '-200px',
         zIndex: 0,
       }} />
-      
+
       {/* Scroll to top button */}
       <Zoom in={trigger}>
         <Fab
@@ -92,13 +82,13 @@ export default function Landing() {
 
       {/* --- ENHANCED GLASS NAVIGATION --- */}
       <Fade in timeout={800}>
-        <Box sx={{ 
+        <Box sx={{
           position: 'sticky', top: 20, zIndex: 1000,
           display: 'flex', justifyContent: 'center', px: 2,
           transition: 'all 0.3s ease',
           transform: scrolled ? 'translateY(-10px)' : 'translateY(0)',
         }}>
-          <Box sx={{ 
+          <Box sx={{
             width: '100%', maxWidth: '1100px',
             backdropFilter: 'blur(20px)',
             bgcolor: alpha('#fff', scrolled ? 0.95 : 0.85),
@@ -106,14 +96,14 @@ export default function Landing() {
             borderColor: alpha('#e2e8f0', scrolled ? 0.9 : 0.6),
             borderRadius: 12, px: 3, py: 1.5,
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            boxShadow: scrolled 
-              ? '0 20px 60px rgba(0,0,0,0.08)' 
+            boxShadow: scrolled
+              ? '0 20px 60px rgba(0,0,0,0.08)'
               : '0 10px 30px rgba(0,0,0,0.04)',
             transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
           }}>
             <Stack direction="row" alignItems="center" spacing={1.5}>
-              <Box sx={{ 
-                p: 0.8, borderRadius: 2, 
+              <Box sx={{
+                p: 0.8, borderRadius: 2,
                 background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
                 display: 'flex',
                 animation: 'pulse 2s infinite',
@@ -126,16 +116,16 @@ export default function Landing() {
               </Box>
               <Typography fontWeight={900} letterSpacing={-1.5} variant="h5" color="#0f172a">STOCK.AI</Typography>
             </Stack>
-            
+
             <Stack direction="row" spacing={1} sx={{ display: { xs: 'none', md: 'flex' } }}>
               {['Dashboard', 'Analytics', 'Market', 'Pricing'].map((text) => (
-                <Button 
+                <Button
                   key={text}
-                  component={RouterLink} to={`/${text.toLowerCase()}`}
-                  sx={{ 
-                    color: '#64748b', 
-                    fontWeight: 700, 
-                    textTransform: 'none', 
+                  component={RouterLink} to={`/${text.toLowerCase().replace(/\s+/g, '-')}`}
+                  sx={{
+                    color: '#64748b',
+                    fontWeight: 700,
+                    textTransform: 'none',
                     px: 2,
                     position: 'relative',
                     '&:after': {
@@ -159,13 +149,13 @@ export default function Landing() {
                 </Button>
               ))}
             </Stack>
-            
+
             <Stack direction="row" spacing={1.5}>
-              <Button 
-                component={RouterLink} to="/login" 
-                sx={{ 
-                  color: '#0f172a', 
-                  fontWeight: 700, 
+              <Button
+                component={RouterLink} to="/login"
+                sx={{
+                  color: '#0f172a',
+                  fontWeight: 700,
                   textTransform: 'none',
                   borderRadius: 4,
                   px: 3,
@@ -179,14 +169,14 @@ export default function Landing() {
               >
                 Login
               </Button>
-              <Button 
-                component={RouterLink} to="/register" 
-                variant="contained" 
-                sx={{ 
-                  borderRadius: 4, 
-                  px: 3, 
+              <Button
+                component={RouterLink} to="/register"
+                variant="contained"
+                sx={{
+                  borderRadius: 4,
+                  px: 3,
                   py: 1,
-                  fontWeight: 800, 
+                  fontWeight: 800,
                   textTransform: 'none',
                   background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
                   color: '#fff',
@@ -203,7 +193,7 @@ export default function Landing() {
                     background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
                     transition: 'left 0.7s'
                   },
-                  '&:hover': { 
+                  '&:hover': {
                     boxShadow: '0 15px 40px rgba(99, 102, 241, 0.4)',
                     '&:before': { left: '100%' }
                   }
@@ -244,11 +234,11 @@ export default function Landing() {
                   LIVE: NASDAQ +1.2% • S&P 500 +0.8%
                 </Typography>
               </Box>
-              
-              <Typography 
-                variant="h1" 
-                sx={{ 
-                  fontWeight: 900, 
+
+              <Typography
+                variant="h1"
+                sx={{
+                  fontWeight: 900,
                   fontSize: { xs: '3rem', md: '5.5rem' },
                   letterSpacing: '-0.06em',
                   lineHeight: 0.95,
@@ -260,7 +250,7 @@ export default function Landing() {
                 }}
               >
                 AI-Powered <br />
-                <Box component="span" sx={{ 
+                <Box component="span" sx={{
                   background: 'linear-gradient(90deg, #6366f1, #a855f7, #ec4899)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
@@ -279,33 +269,33 @@ export default function Landing() {
                   Market Intelligence
                 </Box>
               </Typography>
-              
-              <Typography 
-                variant="h6" 
-                sx={{ 
-                  maxWidth: 700, 
-                  mx: 'auto', 
-                  mb: 6, 
-                  color: '#64748b', 
-                  fontWeight: 500, 
+
+              <Typography
+                variant="h6"
+                sx={{
+                  maxWidth: 700,
+                  mx: 'auto',
+                  mb: 6,
+                  color: '#64748b',
+                  fontWeight: 500,
                   fontSize: '1.3rem',
                   lineHeight: 1.6
                 }}
               >
                 Transform complex market data into <strong>actionable insights</strong> with real-time AI analysis, predictive analytics, and institutional-grade tools.
               </Typography>
-              
+
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} justifyContent="center" alignItems="center">
-                <Button 
-                  component={RouterLink} 
-                  to="/dashboard" 
-                  variant="contained" 
-                  size="large" 
+                <Button
+                  component={RouterLink}
+                  to="/dashboard"
+                  variant="contained"
+                  size="large"
                   endIcon={<ArrowForwardIcon />}
-                  sx={{ 
-                    height: 60, 
-                    px: 6, 
-                    borderRadius: 4, 
+                  sx={{
+                    height: 60,
+                    px: 6,
+                    borderRadius: 4,
                     fontWeight: 800,
                     background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
                     boxShadow: '0 20px 40px rgba(99, 102, 241, 0.3)',
@@ -319,7 +309,7 @@ export default function Landing() {
                 >
                   Launch Dashboard
                 </Button>
-                
+
                 <Button
                   variant="outlined"
                   size="large"
@@ -341,7 +331,7 @@ export default function Landing() {
                   Watch Demo
                 </Button>
               </Stack>
-              
+
               {/* Stats Bar */}
               <Fade in timeout={1500}>
                 <Box sx={{
@@ -379,11 +369,11 @@ export default function Landing() {
         <Typography variant="h6" textAlign="center" mb={6} color="#64748b">
           Comprehensive tools for modern traders
         </Typography>
-        
+
         <Grid container spacing={3} sx={{ mb: 12 }}>
-          {/* Feature 1: Large Card */}
+          {/* Row 1: Left Big Card + Right Stack */}
           <Grid item xs={12} md={8}>
-            <FeatureCard 
+            <FeatureCard
               title="Live Market Intelligence"
               description="Advanced technical indicators, real-time order book analysis, and market sentiment tracking. Get institutional-grade analytics in a simple interface."
               icon={<InsightsIcon />}
@@ -392,32 +382,33 @@ export default function Landing() {
               features={['Real-time alerts', 'Pattern recognition', 'Volume analysis', 'Market depth']}
             />
           </Grid>
-          
-          {/* Feature 2: Small Card */}
+
           <Grid item xs={12} md={4}>
-            <FeatureCard 
-              title="AI Trading Advisor"
-              description="Ask complex questions and get data-backed answers instantly with our advanced NLP engine."
-              icon={<SupportAgentIcon />}
-              color="#ef4444"
-              isInteractive
-            />
+            <Stack spacing={3} height="100%">
+              <Box sx={{ flex: 1 }}>
+                <FeatureCard
+                  title="AI Trading Advisor"
+                  description="Ask complex questions and get data-backed answers instantly with our advanced NLP engine."
+                  icon={<SupportAgentIcon />}
+                  color="#ef4444"
+                  isInteractive
+                />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <FeatureCard
+                  title="Portfolio Sync"
+                  description="Seamless CSV uploads, broker integration, and historical performance analysis."
+                  icon={<ReceiptLongIcon />}
+                  color="#10b981"
+                  isInteractive
+                />
+              </Box>
+            </Stack>
           </Grid>
 
-          {/* Feature 3: Small Card */}
-          <Grid item xs={12} md={4}>
-            <FeatureCard 
-              title="Portfolio Sync"
-              description="Seamless CSV uploads, broker integration, and historical performance analysis."
-              icon={<ReceiptLongIcon />}
-              color="#10b981"
-              isInteractive
-            />
-          </Grid>
-
-          {/* Feature 4: Small Card */}
-          <Grid item xs={12} md={4}>
-            <FeatureCard 
+          {/* Row 2: Remaining Features */}
+          <Grid item xs={12} md={6}>
+            <FeatureCard
               title="Sector Heatmaps"
               description="Visual dominance tracking and trend analysis across all market sectors."
               icon={<TimelineIcon />}
@@ -426,9 +417,8 @@ export default function Landing() {
             />
           </Grid>
 
-          {/* Feature 5: Small Card */}
-          <Grid item xs={12} md={4}>
-            <FeatureCard 
+          <Grid item xs={12} md={6}>
+            <FeatureCard
               title="Predictive Analytics"
               description="ML forecasts for price trends with 85% historical accuracy."
               icon={<AutoAwesomeIcon />}
@@ -486,7 +476,7 @@ export default function Landing() {
                     "{testimonial.text}"
                   </Typography>
                   <Box sx={{ display: 'flex', mt: 3 }}>
-                    {[1,2,3,4,5].map((star) => (
+                    {[1, 2, 3, 4, 5].map((star) => (
                       <Box key={star} sx={{ color: '#fbbf24', mr: 0.5 }}>
                         ★
                       </Box>
@@ -510,11 +500,11 @@ export default function Landing() {
           border: '1px solid #e2e8f0'
         }}>
           {features.map((feature, idx) => (
-            <Box key={idx} sx={{ 
-              flex: 1, 
-              display: 'flex', 
+            <Box key={idx} sx={{
+              flex: 1,
+              display: 'flex',
               alignItems: 'center',
-              gap: 2 
+              gap: 2
             }}>
               <Box sx={{
                 width: 50,
@@ -525,7 +515,7 @@ export default function Landing() {
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
-                {React.cloneElement(feature.icon, { sx: { color: feature.color, fontSize: 24 } })}
+                {React.isValidElement(feature.icon) && React.cloneElement(feature.icon, { sx: { color: feature.color, fontSize: 24 } })}
               </Box>
               <Box>
                 <Typography fontWeight={900} color="#0f172a">
@@ -558,14 +548,14 @@ export default function Landing() {
             borderRadius: '50%',
             background: 'radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, transparent 70%)'
           }} />
-          
+
           <Typography variant="h2" fontWeight={900} mb={3}>
             Start Trading Smarter Today
           </Typography>
           <Typography variant="h6" sx={{ mb: 5, color: '#cbd5e1', maxWidth: 600, mx: 'auto' }}>
             Join thousands of traders who are already making data-driven decisions with AI.
           </Typography>
-          
+
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} justifyContent="center">
             <Button
               component={RouterLink}
@@ -587,7 +577,7 @@ export default function Landing() {
             >
               Get Started Free
             </Button>
-            
+
             <Button
               variant="outlined"
               size="large"
@@ -607,7 +597,7 @@ export default function Landing() {
               Schedule a Demo
             </Button>
           </Stack>
-          
+
           <Typography variant="caption" sx={{ display: 'block', mt: 4, color: '#94a3b8' }}>
             No credit card required • 14-day free trial • Cancel anytime
           </Typography>
@@ -622,25 +612,25 @@ function FeatureCard({ title, description, icon, color, isLarge = false, isInter
   const [hovered, setHovered] = useState(false);
 
   return (
-    <Card 
+    <Card
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      sx={{ 
-        p: 4, 
-        height: '100%', 
+      sx={{
+        p: 4,
+        height: '100%',
         bgcolor: '#fff',
         borderRadius: 6,
         border: '1px solid #f1f5f9',
-        boxShadow: hovered 
-          ? `0 30px 60px ${alpha(color, 0.08)}` 
+        boxShadow: hovered
+          ? `0 30px 60px ${alpha(color, 0.08)}`
           : '0 4px 20px rgba(0,0,0,0.02)',
         transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-        display: 'flex', 
-        flexDirection: 'column', 
+        display: 'flex',
+        flexDirection: 'column',
         justifyContent: 'space-between',
         position: 'relative',
         overflow: 'hidden',
-        '&:hover': { 
+        '&:hover': {
           transform: 'translateY(-8px)',
           borderColor: alpha(color, 0.3)
         }
@@ -662,36 +652,36 @@ function FeatureCard({ title, description, icon, color, isLarge = false, isInter
           }
         }} />
       )}
-      
+
       <Box>
-        <Box sx={{ 
-          width: 60, 
-          height: 60, 
-          borderRadius: 3, 
+        <Box sx={{
+          width: 60,
+          height: 60,
+          borderRadius: 3,
           bgcolor: alpha(color, 0.1),
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
           mb: 3,
           transition: 'all 0.3s ease',
           transform: hovered ? 'scale(1.1) rotate(5deg)' : 'scale(1)'
         }}>
-          {React.cloneElement(icon, { 
-            sx: { 
-              color: color, 
+          {React.isValidElement(icon) && React.cloneElement(icon, {
+            sx: {
+              color: color,
               fontSize: 28,
               transition: 'all 0.3s ease',
               transform: hovered ? 'scale(1.1)' : 'scale(1)'
-            } 
+            }
           })}
         </Box>
-        
-        <Typography 
-          variant={isLarge ? "h3" : "h5"} 
-          fontWeight={900} 
-          mb={2} 
-          color="#0f172a" 
-          sx={{ 
+
+        <Typography
+          variant={isLarge ? "h4" : "h5"}
+          fontWeight={900}
+          mb={2}
+          color="#0f172a"
+          sx={{
             letterSpacing: '-0.02em',
             transition: 'all 0.3s ease',
             transform: hovered ? 'translateX(5px)' : 'translateX(0)'
@@ -699,11 +689,11 @@ function FeatureCard({ title, description, icon, color, isLarge = false, isInter
         >
           {title}
         </Typography>
-        
+
         <Typography variant="body1" sx={{ color: '#64748b', lineHeight: 1.6, fontWeight: 500, mb: 3 }}>
           {description}
         </Typography>
-        
+
         {features.length > 0 && (
           <Box sx={{ mt: 3 }}>
             {features.map((feature, idx) => (
@@ -717,29 +707,29 @@ function FeatureCard({ title, description, icon, color, isLarge = false, isInter
           </Box>
         )}
       </Box>
-      
+
       {(isLarge || isInteractive) && (
         <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Button 
-            variant="text" 
-            endIcon={<ArrowForwardIcon sx={{ 
+          <Button
+            variant="text"
+            endIcon={<ArrowForwardIcon sx={{
               transition: 'transform 0.3s ease',
               transform: hovered ? 'translateX(4px)' : 'translateX(0)'
-            }} />} 
-            sx={{ 
-              color: color, 
-              fontWeight: 800, 
-              p: 0, 
+            }} />}
+            sx={{
+              color: color,
+              fontWeight: 800,
+              p: 0,
               textTransform: 'none',
               '&:hover': { bgcolor: 'transparent' }
             }}
           >
             Explore {title.toLowerCase().includes('ai') ? 'AI' : 'feature'}
           </Button>
-          
+
           {isInteractive && (
-            <Typography variant="caption" sx={{ 
-              color: '#64748b', 
+            <Typography variant="caption" sx={{
+              color: '#64748b',
               fontWeight: 600,
               bgcolor: alpha(color, 0.1),
               px: 2,
