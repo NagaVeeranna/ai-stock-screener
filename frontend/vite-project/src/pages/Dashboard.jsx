@@ -5,8 +5,8 @@ import {
   TableBody, TableCell, TableHead, TableRow, IconButton, Select,
   MenuItem, FormControl, InputLabel, Chip, LinearProgress, useTheme
 } from "@mui/material";
-import { 
-  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, 
+import {
+  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, Brush, Area
 } from 'recharts';
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
@@ -27,9 +27,9 @@ import MainHeader from "../components/MainHeader";
 import api from "../services/api";
 import TopStocksBar from "../components/charts/TopStocksBar";
 import VolumePie from "../components/charts/VolumePie";
-import PortfolioCard from "../components/PortfolioCard"; 
+import PortfolioCard from "../components/PortfolioCard";
 import { useWatchlistStore } from "../store/useWatchlistStore";
-import AlertModal from "../components/alerts/AlertModal"; 
+import AlertModal from "../components/alerts/AlertModal";
 // UPDATED: Import the new NotificationBell component
 import NotificationBell from "../components/NotificationBell";
 
@@ -49,11 +49,11 @@ const COLORS = {
 const Candlestick = (props) => {
   const { x, y, width, height, isUp } = props;
   const lineWidth = Math.max(width * 0.6, 3);
-  const highY = y - height * 0.5; 
-  const lowY = y + height * 0.5;  
-  const bodyTop = Math.min(y, y + height); 
-  const bodyHeight = Math.max(Math.abs(height), 3); 
-  
+  const highY = y - height * 0.5;
+  const lowY = y + height * 0.5;
+  const bodyTop = Math.min(y, y + height);
+  const bodyHeight = Math.max(Math.abs(height), 3);
+
   return (
     <g>
       <line x1={x + width / 2} y1={highY} x2={x + width / 2} y2={lowY} stroke={isUp ? COLORS.success.dark : COLORS.danger.dark} strokeWidth={1.5} strokeLinecap="round" />
@@ -74,49 +74,35 @@ export default function Dashboard() {
   const [selectedStock, setSelectedStock] = useState(null);
   const [stockDetailData, setStockDetailData] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
+
   const [availableSymbols, setAvailableSymbols] = useState([]);
   const [selectedLiveStock, setSelectedLiveStock] = useState("");
   const [liveTrendData, setLiveTrendData] = useState([]);
   const [isLoadingLive, setIsLoadingLive] = useState(false);
   const [chartType, setChartType] = useState("candlestick");
-  
+
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [userAlerts, setUserAlerts] = useState([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   const [currentUserId, setCurrentUserId] = useState(() => {
     const userData = localStorage.getItem('user');
-    return userData ? JSON.parse(userData).id : 5; 
+    return userData ? JSON.parse(userData).id : 5;
   });
-  
+
   const [liveStockInfo, setLiveStockInfo] = useState({
-    symbol: "", name: "", currentPrice: 0, open: 0, high: 0, low: 0, 
+    symbol: "", name: "", currentPrice: 0, open: 0, high: 0, low: 0,
     change: 0, changePercent: 0, volume: 0, source: "", lastUpdated: "", realTime: false
   });
 
-  // UPDATED: Fetch Watchlist with real price data
+  // UPDATED: Fetch Watchlist with real price data (Batched from Backend)
   useEffect(() => {
     const fetchUserWatchlist = async () => {
       try {
         const res = await api.get(`/gateway/watchlist/${currentUserId}`);
         if (res.data?.watchlist) {
-          const watchlistWithPrices = await Promise.all(
-            res.data.watchlist.map(async (item) => {
-              try {
-                // Fetch latest price for each symbol to avoid showing 0
-                const priceRes = await api.get(`/analytics/today-stock/${item.symbol}`);
-                return {
-                  symbol: item.symbol,
-                  price: priceRes.data?.today_data?.current_price || 0,
-                  changePercent: priceRes.data?.today_data?.percent_change || 0
-                };
-              } catch {
-                return { symbol: item.symbol, price: 0, changePercent: 0 };
-              }
-            })
-          );
-          setWatchlist(watchlistWithPrices); 
+          // Backend now returns enriched data with price/change info
+          setWatchlist(res.data.watchlist);
         }
       } catch (err) {
         console.error("Error fetching watchlist from DB:", err);
@@ -131,14 +117,10 @@ export default function Dashboard() {
         user_id: currentUserId,
         symbol: symbol
       });
-      // Refresh logic
+      // Refresh logic - fetch enriched list from backend
       const res = await api.get(`/gateway/watchlist/${currentUserId}`);
       if (res.data?.watchlist) {
-        setWatchlist(res.data.watchlist.map(item => ({
-          symbol: item.symbol,
-          price: 0,
-          changePercent: 0
-        })));
+        setWatchlist(res.data.watchlist);
       }
       alert(`${symbol} added to watchlist!`);
     } catch (err) {
@@ -166,12 +148,12 @@ export default function Dashboard() {
       try {
         const res = await api.get(`/alerts/active/${currentUserId}`);
         if (res.data?.alerts) setUserAlerts(res.data.alerts);
-      } catch (err) { 
-        console.error("Error fetching alerts:", err); 
+      } catch (err) {
+        console.error("Error fetching alerts:", err);
         setUserAlerts([]);
       }
     };
-    
+
     // Notifications now handled by NotificationBell component
     fetchUserAlerts();
   }, [currentUserId]);
@@ -204,7 +186,7 @@ export default function Dashboard() {
         const history = res.data.history_data;
         const processedData = processCandlestickData(history);
         setLiveTrendData(processedData);
-        
+
         const today = res.data.today_data;
         setLiveStockInfo({
           symbol: res.data.symbol,
@@ -221,8 +203,8 @@ export default function Dashboard() {
           lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
       } else { setLiveTrendData([]); }
-    } catch (err) { 
-      console.error("Data Fetch Error:", err); 
+    } catch (err) {
+      console.error("Data Fetch Error:", err);
       setLiveTrendData([]);
     } finally { setIsLoadingLive(false); }
   }, [selectedLiveStock]);
@@ -292,7 +274,7 @@ export default function Dashboard() {
     <Box sx={{ backgroundColor: COLORS.background.light, minHeight: "100vh", pb: 5, background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)" }}>
       <MainHeader title="AI Stock Screener" />
       <Container maxWidth={false} sx={{ pt: 4, px: { xs: 2, md: 8, lg: 10, xl: 12 } }}>
-        
+
         <Box mb={4} display="flex" justifyContent="space-between" alignItems="center">
           <Box>
             <Stack direction="row" spacing={2} alignItems="center">
@@ -343,13 +325,13 @@ export default function Dashboard() {
                 </Box>
               </Stack>
               <Stack direction="row" spacing={2} alignItems="center">
-                
+
                 <Button size="small" variant="outlined" onClick={() => handleAddToWatchlist(selectedLiveStock)} startIcon={<AddIcon />} sx={{ borderRadius: 3, fontWeight: 700, borderColor: COLORS.success.main, color: COLORS.success.main }}>Watchlist</Button>
 
                 <Button size="small" variant="outlined" onClick={() => setShowAlertModal(true)} startIcon={<NotificationsIcon />} sx={{ borderRadius: 3, fontWeight: 700 }}>Create Alert</Button>
-                
+
                 <Button size="small" variant={chartType === "candlestick" ? "contained" : "outlined"} onClick={() => setChartType(chartType === "candlestick" ? "line" : "candlestick")} startIcon={chartType === "candlestick" ? <ShowChartIcon /> : <CandlestickChartIcon />} sx={{ borderRadius: 3, fontWeight: 700 }}>{chartType === "candlestick" ? "Line Chart" : "Candlestick"}</Button>
-                
+
                 <FormControl size="small" sx={{ minWidth: 220 }}>
                   <InputLabel>Select From 46 CSVs</InputLabel>
                   <Select value={selectedLiveStock} label="Select From 46 CSVs" onChange={handleStockChange}>
@@ -378,7 +360,7 @@ export default function Dashboard() {
               {liveTrendData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={liveTrendData}>
-                    <defs><linearGradient id="volGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.info.main} stopOpacity={0.8}/><stop offset="95%" stopColor={COLORS.info.main} stopOpacity={0.1}/></linearGradient></defs>
+                    <defs><linearGradient id="volGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.info.main} stopOpacity={0.8} /><stop offset="95%" stopColor={COLORS.info.main} stopOpacity={0.1} /></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={alpha('#000', 0.1)} />
                     <XAxis dataKey="time" tickFormatter={formatXAxisTick} tick={{ fontSize: 12 }} />
                     <YAxis yAxisId="left" domain={['auto', 'auto']} tickFormatter={(v) => `₹${formatNumber(v)}`} tick={{ fontSize: 12 }} />
@@ -445,9 +427,9 @@ export default function Dashboard() {
                     <TableRow key={alert.id} sx={{ '&:hover': { bgcolor: alpha(COLORS.primary.main, 0.02) } }}>
                       <TableCell sx={{ fontWeight: 800 }}>{alert.symbol}</TableCell>
                       <TableCell>
-                        <Chip 
-                          label={`${alert.condition} ${alert.value}`} 
-                          size="small" 
+                        <Chip
+                          label={`${alert.condition} ${alert.value}`}
+                          size="small"
                           variant="outlined"
                           sx={{ fontWeight: 700, borderColor: COLORS.warning.main, color: COLORS.warning.main }}
                         />
@@ -515,6 +497,6 @@ const formatNumber = (num) => {
 
 const fabStyle = {
   position: 'fixed', bottom: 40, right: 40, borderRadius: 4, px: 4, py: 2.5, fontWeight: 900,
-  background: `linear-gradient(135deg, ${COLORS.pink.main} 0%, ${COLORS.purple.main} 100%)`, 
+  background: `linear-gradient(135deg, ${COLORS.pink.main} 0%, ${COLORS.purple.main} 100%)`,
   boxShadow: '0 15px 35px rgba(236, 72, 153, 0.3)', zIndex: 1000
 };

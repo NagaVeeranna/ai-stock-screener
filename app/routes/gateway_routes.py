@@ -13,13 +13,35 @@ def get_db_connection():
         port="5432"
     )
 
+from app.utils.market_data import get_batch_latest_data
+
 @gateway_bp.route("/watchlist/<int:user_id>", methods=["GET"])
 def get_watchlist(user_id):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     try:
         cur.execute("SELECT symbol FROM watchlist WHERE user_id = %s", (user_id,))
-        return jsonify({"watchlist": cur.fetchall()}), 200
+        watchlist_items = cur.fetchall()
+        
+        # Extract symbols
+        symbols = [item['symbol'] for item in watchlist_items]
+        
+        # Fetch data for all symbols
+        market_data = get_batch_latest_data(symbols)
+        
+        # Enriched watchlist
+        enriched_watchlist = []
+        for item in watchlist_items:
+            sym = item['symbol']
+            data = market_data.get(sym, {})
+            enriched_watchlist.append({
+                "symbol": sym,
+                "price": data.get("price", 0),
+                "changePercent": data.get("changePercent", 0),
+                "source": data.get("source", "none")
+            })
+            
+        return jsonify({"watchlist": enriched_watchlist}), 200
     finally:
         cur.close()
         conn.close()

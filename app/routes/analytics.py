@@ -7,6 +7,17 @@ from datetime import datetime, timedelta
 import numpy as np
 import json
 
+# Import market data utilities
+from app.utils.market_data import (
+    get_market_status,
+    fetch_marketstack_data,
+    process_api_data,
+    get_csv_data,
+    clean_symbol_from_file,
+    DATA_DIR,
+    MARKET_API_KEY
+)
+
 # Load environment variables from .env
 load_dotenv()
 
@@ -14,172 +25,10 @@ analytics_bp = Blueprint("analytics", __name__)
 
 # Constants
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "data", "uploads")
-
-MARKET_API_KEY = os.getenv("MARKET_API_KEY")
+# DATA_DIR and MARKET_API_KEY are now imported
 MARKETSTACK_BASE_URL = "http://api.marketstack.com/v1/eod"
 
-# --- HELPER FUNCTIONS ---
-
-def get_marketstack_symbol(symbol):
-    """Convert symbol to Marketstack format (defaults to NSE)"""
-    clean = symbol.replace('.XNSE', '').replace('.NS', '').replace('.NSE', '').replace('.BSE', '')
-    return f"{clean}.XNSE"
-
-def clean_symbol_from_file(filename):
-    """Extract symbol from cleaned filename"""
-    if filename.startswith('cleaned_'):
-        symbol = filename[8:]  # Remove 'cleaned_'
-    else:
-        symbol = filename
-    
-    if symbol.endswith('.csv'):
-        symbol = symbol[:-4]  # Remove '.csv'
-    
-    return symbol.upper()
-
-def get_market_status():
-    """Check if market is open/closed with detailed info"""
-    now = datetime.now()
-    is_weekend = now.weekday() >= 5
-    
-    # Market hours
-    market_start = now.replace(hour=9, minute=15, second=0, microsecond=0)
-    market_end = now.replace(hour=15, minute=30, second=0, microsecond=0)
-    
-    is_open = False
-    if not is_weekend and market_start <= now <= market_end:
-        is_open = True
-    
-    next_open_date = now
-    if is_weekend:
-        # Next Monday
-        days_until_monday = (7 - now.weekday()) % 7
-        next_open_date = now + timedelta(days=days_until_monday)
-    elif now > market_end:
-        # Tomorrow if weekday
-        next_open_date = now + timedelta(days=1)
-        if next_open_date.weekday() >= 5:
-            # Skip to Monday
-            days_until_monday = (7 - next_open_date.weekday()) % 7
-            next_open_date += timedelta(days=days_until_monday)
-    
-    next_open_time = next_open_date.replace(hour=9, minute=15, second=0, microsecond=0)
-    
-    return {
-        "isOpen": is_open,
-        "isWeekend": is_weekend,
-        "currentTime": now.isoformat(),
-        "marketHours": {
-            "start": "09:15",
-            "end": "15:30"
-        },
-        "nextOpen": next_open_time.isoformat(),
-        "closeTime": "15:30",
-        "status": "open" if is_open else "closed"
-    }
-
-def fetch_marketstack_data(symbol, date_from=None, date_to=None, limit=100):
-    """Generic MarketStack API fetcher"""
-    if not MARKET_API_KEY:
-        return None
-    
-    try:
-        ms_symbol = get_marketstack_symbol(symbol)
-        params = {
-            "access_key": MARKET_API_KEY,
-            "symbols": ms_symbol,
-            "sort": "ASC",
-            "limit": limit
-        }
-        
-        if date_from:
-            params["date_from"] = date_from
-        if date_to:
-            params["date_to"] = date_to
-        
-        response = requests.get(MARKETSTACK_BASE_URL, params=params, timeout=15)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        print(f"MarketStack API Error: {e}")
-        return None
-
-def process_api_data(api_response):
-    """Process MarketStack API response into standardized format"""
-    if not api_response or "data" not in api_response:
-        return []
-    
-    formatted_data = []
-    for item in api_response["data"]:
-        if item:
-            formatted_data.append({
-                "date": item.get("date", "")[:10],
-                "time": item.get("date", "")[:10],  # Added time field
-                "open": round(float(item.get("open") or 0), 2),
-                "high": round(float(item.get("high") or 0), 2),
-                "low": round(float(item.get("low") or 0), 2),
-                "close": round(float(item.get("close") or 0), 2),
-                "volume": int(item.get("volume") or 0),
-                "source": "API"
-            })
-    return formatted_data
-def get_csv_data(symbol, start_date=None, end_date=None):
-    """Robust CSV loader with filename auto-detection"""
-    symbol = symbol.upper()
-    csv_path = None
-
-    if not os.path.exists(DATA_DIR):
-        print("CSV directory not found:", DATA_DIR)
-        return []
-
-    # 🔍 Auto-detect CSV file (case-insensitive)
-    for file in os.listdir(DATA_DIR):
-        if file.lower() == f"cleaned_{symbol.lower()}.csv":
-            csv_path = os.path.join(DATA_DIR, file)
-            break
-
-    if not csv_path:
-        print(f"CSV not found for symbol: {symbol}")
-        return []
-
-    try:
-        df = pd.read_csv(csv_path)
-
-        if df.empty or 'date' not in df.columns or 'close' not in df.columns:
-            print("Invalid CSV structure:", csv_path)
-            return []
-
-        df['date'] = pd.to_datetime(df['date'])
-
-        if start_date:
-            df = df[df['date'] >= pd.Timestamp(start_date)]
-        if end_date:
-            df = df[df['date'] <= pd.Timestamp(end_date)]
-
-        df = df.sort_values('date')
-
-        formatted = []
-        for _, row in df.iterrows():
-            formatted.append({
-                "date": row['date'].strftime('%Y-%m-%d'),
-                "time": row['date'].strftime('%Y-%m-%d'),
-                "open": round(float(row.get('open', row['close'])), 2),
-                "high": round(float(row.get('high', row['close'])), 2),
-                "low": round(float(row.get('low', row['close'])), 2),
-                "close": round(float(row['close']), 2),
-                "volume": int(row.get('volume', 0)),
-                "source": "CSV"
-            })
-
-        return formatted
-
-    except Exception as e:
-        print(f"CSV read error for {symbol}: {e}")
-        return []
-
-
-# --- NEW ENDPOINTS FOR FRONTEND ---
+# --- HELPER FUNCTIONS MOVED TO app.utils.market_data ---
 
 @analytics_bp.route("/analytics/marketstack/<symbol>", methods=["GET"])
 def get_marketstack_year_data(symbol):
