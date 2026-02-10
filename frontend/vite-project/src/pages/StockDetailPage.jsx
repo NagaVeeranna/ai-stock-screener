@@ -35,13 +35,13 @@ export default function StockDetailPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [dataSource, setDataSource] = useState('MIXED'); // CSV, API, or MIXED
-  
+
   // Data states
   const [csvData, setCsvData] = useState([]); // 2021 and earlier data
   const [apiData, setApiData] = useState([]); // 2022-2026 MarketStack data
   const [combinedData, setCombinedData] = useState([]);
   const [marketStatus, setMarketStatus] = useState(null);
-  
+
   // Year & Quarter State
   const [selectedYear, setSelectedYear] = useState(2026);
   const [selectedQuarter, setSelectedQuarter] = useState(3); // Q4 by default (Oct-Dec)
@@ -64,66 +64,43 @@ export default function StockDetailPage() {
   }, [symbol]);
 
   // Fetch Live MarketStack API Data (2022-2026)
-  const fetchApiData = useCallback(async (year = null) => {
+  const fetchApiData = useCallback(async (year) => {
     try {
       setRefreshing(true);
-      
-      // If specific year requested, fetch that year's data
-      if (year) {
-        const res = await api.get(`/analytics/marketstack/${symbol.trim()}`, {
-          params: { year: year }
+      const yearToFetch = year || selectedYear;
+
+      // Check if we already have data for this year to avoid redundant API calls
+      // (Optional optimization: if you want to force refresh, you can skip this check)
+      // For now, we'll always fetch to ensure latest data, or we could check:
+      // const hasData = apiData.some(d => new Date(d.date).getFullYear() === yearToFetch);
+      // if (hasData) { setRefreshing(false); return; }
+
+      const res = await api.get(`/analytics/marketstack/${symbol.trim()}`, {
+        params: { year: yearToFetch }
+      });
+
+      if (res.data?.data) {
+        setApiData(prev => {
+          const newData = res.data.data.map(item => ({
+            ...item,
+            source: 'API',
+            date: item.date,
+            color: SOURCE_COLORS.API,
+            isLive: yearToFetch === 2026 // Mark 2026 data as live
+          }));
+
+          // Merge with existing API data, removing duplicates based on date
+          const existingDates = new Set(prev.map(d => d.date));
+          const uniqueNewData = newData.filter(d => !existingDates.has(d.date));
+          return [...prev, ...uniqueNewData];
         });
-        
-        if (res.data?.data) {
-          setApiData(prev => {
-            const newData = res.data.data.map(item => ({
-              ...item,
-              source: 'API',
-              date: item.date,
-              color: SOURCE_COLORS.API,
-              isLive: year === 2026 // Mark 2026 data as live
-            }));
-            
-            // Merge with existing API data, removing duplicates
-            const existingDates = new Set(prev.map(d => d.date));
-            const uniqueNewData = newData.filter(d => !existingDates.has(d.date));
-            return [...prev, ...uniqueNewData];
-          });
-        }
-      } else {
-        // Fetch for all years 2022-2026
-        const yearsToFetch = [2022, 2023, 2024, 2025, 2026];
-        for (const year of yearsToFetch) {
-          const res = await api.get(`/analytics/marketstack/${symbol.trim()}`, {
-            params: { year: year }
-          });
-          
-          if (res.data?.data) {
-            setApiData(prev => {
-              const newData = res.data.data.map(item => ({
-                ...item,
-                source: 'API',
-                date: item.date,
-                color: SOURCE_COLORS.API,
-                isLive: year === 2026
-              }));
-              
-              const existingDates = new Set(prev.map(d => d.date));
-              const uniqueNewData = newData.filter(d => !existingDates.has(d.date));
-              return [...prev, ...uniqueNewData];
-            });
-          }
-          
-          // Small delay to prevent rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
       }
     } catch (err) {
       console.error("MarketStack API fetch failed", err);
     } finally {
       setRefreshing(false);
     }
-  }, [symbol]);
+  }, [symbol, selectedYear]); // Added selectedYear dependency if needed, though strictly passed as arg usually
 
   // Check market status
   const checkMarketStatus = useCallback(async () => {
@@ -140,17 +117,28 @@ export default function StockDetailPage() {
     const initializeData = async () => {
       setLoading(true);
       await fetchCsvData();
-      await fetchApiData();
+      // fetchApiData is handled by the useEffect watching selectedYear
       await checkMarketStatus();
       setLoading(false);
     };
     initializeData();
-  }, [fetchCsvData, fetchApiData, checkMarketStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount
+
+  // Fetch data when selectedYear changes (if it's an API year)
+  useEffect(() => {
+    if (selectedYear >= 2022) {
+      // We can optionally check if we already have data for this year effectively here
+      // But for simplicity and to ensure we get data if missing, we fetch.
+      // To avoid infinite loops or double fetches, ensure fetchApiData is stable or guarded.
+      fetchApiData(selectedYear);
+    }
+  }, [selectedYear, fetchApiData]);
 
   // Combine and filter data based on selected source
   useEffect(() => {
     let filteredData = [];
-    
+
     if (dataSource === 'CSV') {
       filteredData = csvData;
     } else if (dataSource === 'API') {
@@ -158,28 +146,28 @@ export default function StockDetailPage() {
     } else { // MIXED
       filteredData = [...csvData, ...apiData];
     }
-    
+
     // Filter by selected year
     filteredData = filteredData.filter(item => {
       const itemYear = new Date(item.date).getFullYear();
       return itemYear === selectedYear;
     });
-    
+
     // Sort by date
     filteredData.sort((a, b) => new Date(a.date) - new Date(b.date));
-    
+
     setCombinedData(filteredData);
   }, [csvData, apiData, dataSource, selectedYear, selectedQuarter]);
 
   // Calculate quarter stats
   const quarterStats = useMemo(() => {
     if (!combinedData || combinedData.length === 0) return null;
-    
+
     const quarterData = combinedData.filter(item => {
       const date = new Date(item.date);
       const month = date.getMonth() + 1; // 1-12
-      
-      switch(selectedQuarter) {
+
+      switch (selectedQuarter) {
         case 0: return month >= 1 && month <= 3; // Q1
         case 1: return month >= 4 && month <= 6; // Q2
         case 2: return month >= 7 && month <= 9; // Q3
@@ -187,18 +175,18 @@ export default function StockDetailPage() {
         default: return true;
       }
     });
-    
+
     if (quarterData.length === 0) return null;
-    
+
     const sorted = [...quarterData].sort((a, b) => new Date(a.date) - new Date(b.date));
     const start = sorted[0].close;
     const end = sorted[sorted.length - 1].close;
     const change = end - start;
     const percentChange = ((change / start) * 100).toFixed(2);
-    
+
     const highs = sorted.map(d => d.high || d.close);
     const lows = sorted.map(d => d.low || d.close);
-    
+
     return {
       current: end,
       high: Math.max(...highs),
@@ -224,13 +212,13 @@ export default function StockDetailPage() {
     const sources = combinedData.map(d => d.source);
     const hasCSV = sources.includes('CSV');
     const hasAPI = sources.includes('API');
-    
+
     if (hasCSV && hasAPI) {
       return (
-        <Chip 
+        <Chip
           icon={<WarningIcon />}
           label="MIXED SOURCES"
-          sx={{ 
+          sx={{
             bgcolor: SOURCE_COLORS.MIXED + '20',
             color: SOURCE_COLORS.MIXED,
             fontWeight: 800,
@@ -240,10 +228,10 @@ export default function StockDetailPage() {
       );
     } else if (hasCSV) {
       return (
-        <Chip 
+        <Chip
           icon={<HistoryIcon />}
           label="HISTORICAL CSV"
-          sx={{ 
+          sx={{
             bgcolor: SOURCE_COLORS.CSV + '20',
             color: SOURCE_COLORS.CSV,
             fontWeight: 800,
@@ -253,10 +241,10 @@ export default function StockDetailPage() {
       );
     } else {
       return (
-        <Chip 
+        <Chip
           icon={<LiveTvIcon />}
           label="LIVE API"
-          sx={{ 
+          sx={{
             bgcolor: SOURCE_COLORS.API + '20',
             color: SOURCE_COLORS.API,
             fontWeight: 800,
@@ -274,19 +262,19 @@ export default function StockDetailPage() {
   );
 
   return (
-    <Box sx={{ 
-      bgcolor: "#f1f5f9", 
-      minHeight: "100vh", 
+    <Box sx={{
+      bgcolor: "#f1f5f9",
+      minHeight: "100vh",
       pb: 10,
       width: '100vw',
       overflowX: 'hidden'
     }}>
-      
+
       {/* MARKET STATUS ALERT */}
       {marketStatus && (
-        <Alert 
+        <Alert
           severity={marketStatus.isOpen ? "success" : "warning"}
-          sx={{ 
+          sx={{
             borderRadius: 0,
             borderBottom: '1px solid #e2e8f0',
             bgcolor: marketStatus.isOpen ? '#10b98115' : '#f59e0b15'
@@ -295,7 +283,7 @@ export default function StockDetailPage() {
           <AlertTitle>
             {marketStatus.isOpen ? '🏛️ MARKET OPEN' : '🏛️ MARKET CLOSED'}
           </AlertTitle>
-          {marketStatus.isOpen ? 
+          {marketStatus.isOpen ?
             `Live trading until ${marketStatus.closeTime}. Real-time data available for 2026.` :
             `Market closed. Next session starts at ${marketStatus.nextOpen}. Showing latest available data.`
           }
@@ -303,20 +291,20 @@ export default function StockDetailPage() {
       )}
 
       {/* 1. TERMINAL HEADER - KEPT SAME */}
-      <Paper elevation={0} sx={{ 
-        p: 3, 
-        borderBottom: '1px solid #e2e8f0', 
-        bgcolor: 'white', 
-        position: 'sticky', 
-        top: 0, 
-        zIndex: 1000 
+      <Paper elevation={0} sx={{
+        p: 3,
+        borderBottom: '1px solid #e2e8f0',
+        bgcolor: 'white',
+        position: 'sticky',
+        top: 0,
+        zIndex: 1000
       }}>
         <Container maxWidth={false}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
             <Stack direction="row" spacing={3} alignItems="center">
-              <Button 
-                startIcon={<ArrowBackIcon />} 
-                onClick={() => navigate("/dashboard")} 
+              <Button
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigate("/dashboard")}
                 sx={{ fontWeight: 800, color: '#0f172a' }}
               >
                 TERMINAL
@@ -347,9 +335,9 @@ export default function StockDetailPage() {
               {/* Year Selector */}
               <FormControl size="small" sx={{ minWidth: 150 }}>
                 <InputLabel>Select Year</InputLabel>
-                <Select 
-                  value={selectedYear} 
-                  label="Select Year" 
+                <Select
+                  value={selectedYear}
+                  label="Select Year"
                   onChange={(e) => setSelectedYear(e.target.value)}
                   sx={{ borderRadius: 2, fontWeight: 700 }}
                 >
@@ -365,9 +353,9 @@ export default function StockDetailPage() {
               {/* Quarter Selector */}
               <FormControl size="small" sx={{ minWidth: 140 }}>
                 <InputLabel>Quarter</InputLabel>
-                <Select 
-                  value={selectedQuarter} 
-                  label="Quarter" 
+                <Select
+                  value={selectedQuarter}
+                  label="Quarter"
                   onChange={(e) => setSelectedQuarter(e.target.value)}
                   sx={{ borderRadius: 2, fontWeight: 700 }}
                 >
@@ -377,15 +365,15 @@ export default function StockDetailPage() {
                   <MenuItem value={3}>Q4 (Oct-Dec)</MenuItem>
                 </Select>
               </FormControl>
-              
-              <IconButton 
+
+              <IconButton
                 onClick={() => {
                   if (selectedYear >= 2022) {
                     fetchApiData(selectedYear);
                   }
-                }} 
+                }}
                 disabled={refreshing}
-                sx={{ 
+                sx={{
                   bgcolor: '#4f46e5',
                   color: 'white',
                   '&:hover': { bgcolor: '#4338ca' }
@@ -402,13 +390,13 @@ export default function StockDetailPage() {
       <Box sx={{ mt: 3, px: { xs: 2, sm: 3, lg: 4 }, scrollMarginTop: '120px' }}>
         {/* ✅ STEP 1 — KEY FIX: Add direction="column" to force vertical stacking */}
         <Grid container spacing={3} direction="column">
-          
+
           {/* ✅ STEP 1 — BIG FULL-WIDTH CHART DOMINATES THE PAGE */}
           <Grid item xs={12}>
-            <Paper sx={{ 
+            <Paper sx={{
               p: { xs: 2, md: 3, lg: 4 },
-              borderRadius: 4, 
-              border: '1px solid #e2e8f0', 
+              borderRadius: 4,
+              border: '1px solid #e2e8f0',
               bgcolor: 'white',
               position: 'relative',
               overflow: 'hidden',
@@ -416,11 +404,11 @@ export default function StockDetailPage() {
             }}>
               {/* Loading Overlay */}
               {refreshing && (
-                <Box sx={{ 
-                  position: 'absolute', 
-                  top: 0, 
-                  left: 0, 
-                  right: 0, 
+                <Box sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
                   zIndex: 10,
                   bgcolor: 'rgba(255,255,255,0.9)'
                 }}>
@@ -431,11 +419,11 @@ export default function StockDetailPage() {
               <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" mb={4} gap={3}>
                 <Box>
                   <Typography variant="h2" fontWeight={900} color="#0f172a">
-                    {quarterStats ? `₹${quarterStats.current.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : "₹---"}
+                    {quarterStats ? `₹${quarterStats.current.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "₹---"}
                   </Typography>
                   {quarterStats && (
                     <Stack direction="row" spacing={1} alignItems="center" mt={1}>
-                      <Chip 
+                      <Chip
                         icon={quarterStats.isPositive ? <TrendingUpIcon /> : <TrendingDownIcon />}
                         label={`${quarterStats.isPositive ? '+' : ''}${quarterStats.percentChange}%`}
                         color={quarterStats.isPositive ? "success" : "error"}
@@ -451,20 +439,20 @@ export default function StockDetailPage() {
                   <Box textAlign="right">
                     <Typography variant="caption" color="text.secondary" fontWeight={700}>PERIOD HIGH</Typography>
                     <Typography variant="h5" fontWeight={800} color="#059669">
-                      ₹{quarterStats?.high?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}
+                      ₹{quarterStats?.high?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
                     </Typography>
                   </Box>
                   <Box textAlign="right">
                     <Typography variant="caption" color="text.secondary" fontWeight={700}>PERIOD LOW</Typography>
                     <Typography variant="h5" fontWeight={800} color="#dc2626">
-                      ₹{quarterStats?.low?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}
+                      ₹{quarterStats?.low?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
                     </Typography>
                   </Box>
                 </Stack>
               </Stack>
-              
+
               {/* ✅ CHART WITH MAXIMUM HEIGHT (TRADINGVIEW STYLE) */}
-              <Box sx={{ 
+              <Box sx={{
                 height: {
                   xs: 420,
                   md: 700,
@@ -482,37 +470,37 @@ export default function StockDetailPage() {
                     >
                       <defs>
                         <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid 
-                        vertical={false} 
-                        strokeDasharray="3 3" 
-                        stroke="#f1f5f9" 
+                      <CartesianGrid
+                        vertical={false}
+                        strokeDasharray="3 3"
+                        stroke="#f1f5f9"
                       />
-                      
-                      <XAxis 
-                        dataKey="date" 
+
+                      <XAxis
+                        dataKey="date"
                         padding={{ left: 0, right: 0 }}
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fontSize: 12, fontWeight: 600, fill: '#64748b' }} 
-                        tickFormatter={(v) => new Date(v).toLocaleDateString('en-IN', {day:'numeric', month:'short'})} 
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 12, fontWeight: 600, fill: '#64748b' }}
+                        tickFormatter={(v) => new Date(v).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                       />
-                      
-                      <YAxis 
-                        domain={['auto', 'auto']} 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fontSize: 12, fontWeight: 600, fill: '#64748b' }} 
+
+                      <YAxis
+                        domain={['auto', 'auto']}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 12, fontWeight: 600, fill: '#64748b' }}
                         tickFormatter={(value) => `₹${value.toLocaleString()}`}
                       />
-                      
-                      <RechartsTooltip 
-                        contentStyle={{ 
-                          borderRadius: '12px', 
-                          border: '1px solid #e2e8f0', 
+
+                      <RechartsTooltip
+                        contentStyle={{
+                          borderRadius: '12px',
+                          border: '1px solid #e2e8f0',
                           boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
                           padding: '12px',
                           backgroundColor: 'white'
@@ -524,8 +512,8 @@ export default function StockDetailPage() {
                             `${name} (${dataPoint.source})`
                           ];
                         }}
-                        labelFormatter={(label) => 
-                          new Date(label).toLocaleDateString('en-US', { 
+                        labelFormatter={(label) =>
+                          new Date(label).toLocaleDateString('en-US', {
                             weekday: 'short',
                             year: 'numeric',
                             month: 'short',
@@ -533,42 +521,42 @@ export default function StockDetailPage() {
                           })
                         }
                       />
-                      
+
                       {/* Volume Bars */}
-                      <Bar 
-                        yAxisId="right" 
-                        dataKey="volume" 
-                        fill="#e2e8f0" 
-                        opacity={0.5} 
-                        barSize={40} 
-                        radius={[4, 4, 0, 0]} 
+                      <Bar
+                        yAxisId="right"
+                        dataKey="volume"
+                        fill="#e2e8f0"
+                        opacity={0.5}
+                        barSize={40}
+                        radius={[4, 4, 0, 0]}
                       />
-                      
+
                       {/* Area Chart */}
-                      <Area 
-                        type="monotone" 
-                        dataKey="close" 
-                        stroke="#4f46e5" 
-                        strokeWidth={4} 
-                        fill="url(#areaGradient)" 
-                        animationDuration={2000} 
+                      <Area
+                        type="monotone"
+                        dataKey="close"
+                        stroke="#10b981"
+                        strokeWidth={4}
+                        fill="url(#areaGradient)"
+                        animationDuration={2000}
                       />
-                      
+
                       {/* Scatter points colored by source */}
-                      <Scatter 
-                        dataKey="close" 
+                      <Scatter
+                        dataKey="close"
                         fill={(entry) => entry.color || SOURCE_COLORS.API}
                         stroke="white"
                         strokeWidth={2}
                         r={3}
                       />
-                      
+
                       {/* Reference line for current price */}
                       {quarterStats && (
-                        <ReferenceLine 
-                          y={quarterStats.current} 
-                          stroke="#ef4444" 
-                          strokeDasharray="3 3" 
+                        <ReferenceLine
+                          y={quarterStats.current}
+                          stroke="#ef4444"
+                          strokeDasharray="3 3"
                           strokeWidth={1}
                           label={{
                             value: `Current: ₹${quarterStats.current.toFixed(2)}`,
@@ -581,20 +569,20 @@ export default function StockDetailPage() {
                     </ComposedChart>
                   </ResponsiveContainer>
                 ) : (
-                  <Stack 
-                    alignItems="center" 
-                    justifyContent="center" 
-                    height="100%" 
-                    bgcolor="#f8fafc" 
-                    borderRadius={4} 
+                  <Stack
+                    alignItems="center"
+                    justifyContent="center"
+                    height="100%"
+                    bgcolor="#f8fafc"
+                    borderRadius={4}
                     border="2px dashed #e2e8f0"
                   >
                     <Typography variant="h5" color="text.secondary" fontWeight={700}>
                       No Data Available
                     </Typography>
                     <Typography variant="body2" color="text.secondary" mt={1}>
-                      {selectedYear <= 2021 ? 
-                        "Select 2021 for CSV historical data" : 
+                      {selectedYear <= 2021 ?
+                        "Select 2021 for CSV historical data" :
                         "Click refresh to fetch API data"
                       }
                     </Typography>
@@ -623,7 +611,7 @@ export default function StockDetailPage() {
                 <Typography variant="h6" fontWeight={800} mb={3} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <TimelineIcon color="primary" /> Data Sources & Statistics
                 </Typography>
-                
+
                 <Grid container spacing={3}>
                   <Grid item xs={6} md={3}>
                     <Typography variant="caption" color="text.secondary" fontWeight={800}>
@@ -658,9 +646,9 @@ export default function StockDetailPage() {
                     </Typography>
                   </Grid>
                 </Grid>
-                
+
                 <Divider sx={{ my: 3 }} />
-                
+
                 <Grid container spacing={3}>
                   <Grid item xs={12} md={6}>
                     <Stack spacing={2}>
@@ -672,22 +660,22 @@ export default function StockDetailPage() {
                           {selectedYear} • {getQuarterLabel()} • {quarterStats?.days || 0} trading days
                         </Typography>
                       </Box>
-                      
+
                       <Box>
                         <Typography variant="body2" color="text.secondary" fontWeight={600}>
                           🔄 Data Source:
                         </Typography>
                         <Typography variant="body1" fontWeight={700} color={
                           dataSource === 'CSV' ? SOURCE_COLORS.CSV :
-                          dataSource === 'API' ? SOURCE_COLORS.API : SOURCE_COLORS.MIXED
+                            dataSource === 'API' ? SOURCE_COLORS.API : SOURCE_COLORS.MIXED
                         }>
                           {dataSource === 'CSV' ? 'Historical CSV Database' :
-                           dataSource === 'API' ? 'Live MarketStack API' : 'Mixed (CSV + API)'}
+                            dataSource === 'API' ? 'Live MarketStack API' : 'Mixed (CSV + API)'}
                         </Typography>
                       </Box>
                     </Stack>
                   </Grid>
-                  
+
                   <Grid item xs={12} md={6}>
                     {quarterStats && (
                       <Stack spacing={2}>
@@ -696,11 +684,11 @@ export default function StockDetailPage() {
                             📈 Quarter Performance:
                           </Typography>
                           <Typography variant="body1" fontWeight={700} color={quarterStats.isPositive ? '#059669' : '#dc2626'}>
-                            {quarterStats.isPositive ? '+' : ''}{quarterStats.percentChange}% 
+                            {quarterStats.isPositive ? '+' : ''}{quarterStats.percentChange}%
                             ({quarterStats.isPositive ? '+' : ''}₹{quarterStats.change.toFixed(2)})
                           </Typography>
                         </Box>
-                        
+
                         <Box>
                           <Typography variant="body2" color="text.secondary" fontWeight={600}>
                             📊 Price Range:
@@ -733,9 +721,9 @@ export default function StockDetailPage() {
                 boxShadow: '0 4px 20px rgba(79, 70, 229, 0.1)'
               }
             }}>
-              <Box sx={{ 
+              <Box sx={{
                 p: { xs: 2, md: 3 },
-                bgcolor: '#ffffff', 
+                bgcolor: '#ffffff',
                 borderBottom: '1px solid #e2e8f0',
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -743,13 +731,13 @@ export default function StockDetailPage() {
               }}>
                 <Typography variant="h6" fontWeight={800}>Daily Performance Log</Typography>
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <Chip 
+                  <Chip
                     label={`${combinedData.length} records`}
                     size="small"
                     sx={{ fontWeight: 700 }}
                   />
                   {quarterStats && (
-                    <Chip 
+                    <Chip
                       label={`Avg Vol: ${(quarterStats.avgVolume / 1000).toFixed(0)}K`}
                       size="small"
                       sx={{ fontWeight: 700, bgcolor: '#4f46e5', color: 'white' }}
@@ -757,7 +745,7 @@ export default function StockDetailPage() {
                   )}
                 </Stack>
               </Box>
-              
+
               <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
                 <Table size="small" stickyHeader>
                   <TableHead>
@@ -772,16 +760,16 @@ export default function StockDetailPage() {
                   <TableBody>
                     {combinedData.slice().reverse().map((row, i) => {
                       // Calculate daily change
-                      const prevClose = i < combinedData.length - 1 ? 
+                      const prevClose = i < combinedData.length - 1 ?
                         combinedData[combinedData.length - 2 - i]?.close : row.close;
                       const dailyChange = ((row.close - prevClose) / prevClose * 100).toFixed(2);
                       const isPositive = row.close >= prevClose;
-                      
+
                       return (
-                        <TableRow 
-                          key={i} 
-                          hover 
-                          sx={{ 
+                        <TableRow
+                          key={i}
+                          hover
+                          sx={{
                             '&:hover': { bgcolor: '#f1f5f9' },
                             transition: 'background-color 0.2s'
                           }}
@@ -797,10 +785,10 @@ export default function StockDetailPage() {
                             ₹{row.close.toFixed(2)}
                           </TableCell>
                           <TableCell>
-                            <Chip 
-                              size="small" 
+                            <Chip
+                              size="small"
                               label={row.source}
-                              sx={{ 
+                              sx={{
                                 bgcolor: row.color + '20',
                                 color: row.color,
                                 fontWeight: 700,
@@ -810,10 +798,10 @@ export default function StockDetailPage() {
                             />
                           </TableCell>
                           <TableCell>
-                            <Chip 
+                            <Chip
                               size="small"
                               label={`${isPositive ? '+' : ''}${dailyChange}%`}
-                              sx={{ 
+                              sx={{
                                 bgcolor: isPositive ? '#d1fae5' : '#fee2e2',
                                 color: isPositive ? '#059669' : '#dc2626',
                                 fontWeight: 700,
@@ -830,7 +818,7 @@ export default function StockDetailPage() {
                         </TableRow>
                       );
                     })}
-                    
+
                     {combinedData.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
@@ -843,11 +831,11 @@ export default function StockDetailPage() {
                   </TableBody>
                 </Table>
               </Box>
-              
+
               {combinedData.length > 0 && (
-                <Box sx={{ 
-                  p: 2, 
-                  bgcolor: '#ffffff', 
+                <Box sx={{
+                  p: 2,
+                  bgcolor: '#ffffff',
                   borderTop: '1px solid #e2e8f0',
                   display: 'flex',
                   justifyContent: 'space-between',
